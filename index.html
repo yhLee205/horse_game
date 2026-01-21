@@ -2,25 +2,45 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Red Horse Run</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Red Horse Run - Mobile Fix</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nanum+Baeruen+Pen:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f7f7f7; overflow: hidden; font-family: 'Press Start 2P', cursive; touch-action: none; }
-        #game-container { position: relative; width: 800px; height: 200px; background-color: #f7f7f7; }
-        canvas { display: block; background-color: transparent; }
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        body { 
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; 
+            height: 100vh; background-color: #f7f7f7; overflow: hidden; 
+            font-family: 'Press Start 2P', cursive; touch-action: none; 
+        }
+        #game-container { 
+            position: relative; 
+            width: 100vw; /* 모바일 너비에 맞춤 */
+            max-width: 800px; 
+            aspect-ratio: 4 / 1; /* 비율 고정으로 잘림 방지 */
+            background-color: #f7f7f7; 
+        }
+        canvas { 
+            display: block; width: 100%; height: 100%; 
+            background-color: transparent; image-rendering: pixelated; 
+        }
+        .ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; 
+        }
         #gameOverUI { display: none; text-align: center; }
-        .game-over-text { color: #e52c2f; font-size: 24px; margin-bottom: 20px; }
-        .restart-btn { pointer-events: all; cursor: pointer; background: #e52c2f; border: none; padding: 12px 24px; font-family: 'Press Start 2P', cursive; font-size: 14px; color: #f7f7f7; border-radius: 4px; }
+        .game-over-text { color: #e52c2f; font-size: clamp(14px, 5vw, 24px); margin-bottom: 10px; }
+        .restart-btn { 
+            pointer-events: all; cursor: pointer; background: #e52c2f; border: none; 
+            padding: 10px 20px; font-family: 'Press Start 2P', cursive; 
+            font-size: clamp(10px, 3vw, 14px); color: #f7f7f7; border-radius: 4px; 
+        }
     </style>
 </head>
 <body>
-
     <div id="game-container">
         <canvas id="game"></canvas>
         <div id="gameOverUI" class="ui-layer">
-            <div class="game-over-text">GAME OVER</div>
+            <div class="game-over-text">G A M E  O V E R</div>
             <button class="restart-btn" onclick="resetGame(event)">RESTART</button>
         </div>
     </div>
@@ -30,15 +50,22 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const gameOverUI = document.getElementById('gameOverUI');
 
+// 내부 논리 해상도는 800x200 고정
 canvas.width = 800;
 canvas.height = 200;
 ctx.imageSmoothingEnabled = false;
 
+// 이미지 로드 관리
 const imgRun1 = new Image(); imgRun1.src = 'horse_run1.png';
 const imgRun2 = new Image(); imgRun2.src = 'horse_run2.png';
 const imgRun3 = new Image(); imgRun3.src = 'horse_run3.png';
 const imgFire = new Image(); imgFire.src = 'fire.png';
 const runFrames = [imgRun1, imgRun2, imgRun3];
+
+let imagesLoaded = 0;
+[imgRun1, imgRun2, imgRun3, imgFire].forEach(img => {
+    img.onload = () => { imagesLoaded++; if(imagesLoaded === 4) loop(); };
+});
 
 let score = 0;
 let highScore = localStorage.getItem('horseHighScore') || 0;
@@ -53,13 +80,9 @@ let obstacles = [];
 let clouds = [];
 let floorDots = [];
 
-// 이스터에그 설정
 let easterEgg = {
     text: "Happy New Year! 새해 복 많이 받으세요! 2026년은 붉은 말의 해라고 합니다. 올 한 해는 하고 싶은 일들에 망설임 없이 도전하고, 더욱 열정적으로 달릴 수 있는 힘찬 한 해 되길 바랍니다. 어떤 장애물이 나타나더라도 모든 걸 뛰어넘을 만큼 열정 가득한 한 해가 되길 응원합니다!",
-    x: 850,
-    y: 110,
-    triggered: false,
-    visible: true
+    x: 850, y: 110, triggered: false, visible: true
 };
 
 let touchStartY = 0;
@@ -68,7 +91,7 @@ for(let i=0; i<15; i++) {
     floorDots.push({ x: Math.random()*800, y: 188 + Math.random()*8, w: Math.random()*4+1 });
 }
 
-function handleJump() {
+function handleInput() {
     if (isGameOver) return;
     if (!horse.isJumping) { horse.isJumping = true; horse.dy = -horse.jumpForce; }
 }
@@ -110,7 +133,6 @@ function update() {
     if (frameCount % 120 === 0) clouds.push({ x: 800, y: 30 + Math.random()*50, w: 40 + Math.random()*30 });
     clouds.forEach((c, i) => { c.x -= 1; if(c.x + c.w < 0) clouds.splice(i, 1); });
 
-    // 이스터에그 텍스트 이동
     if (easterEgg.triggered && easterEgg.visible) {
         easterEgg.x -= 1;
         if (easterEgg.x < -3800) easterEgg.visible = false;
@@ -146,15 +168,12 @@ function update() {
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 구름 그리기
     ctx.fillStyle = "rgba(229, 44, 47, 0.2)";
     clouds.forEach(c => { ctx.fillRect(c.x, c.y, c.w, 12); ctx.fillRect(c.x + 8, c.y - 4, c.w - 16, 4); });
 
-    // 이스터에그 메시지 (나눔 바른 펜 적용)
     if (easterEgg.triggered && easterEgg.visible) {
         ctx.fillStyle = "rgba(83, 83, 83, 0.85)";
-        ctx.font = '700 15px "Nanum Baeruen Pen", sans-serif'; // 정갈한 손글씨 폰트
+        ctx.font = '700 15px "Nanum Baeruen Pen", sans-serif'; 
         ctx.textAlign = 'left';
         ctx.fillText(easterEgg.text, easterEgg.x, easterEgg.y);
     }
@@ -172,19 +191,28 @@ function draw() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
+// 입력 리스너 (모바일/PC 통합)
 window.addEventListener('keydown', (e) => { 
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); handleJump(); } 
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); handleInput(); } 
     else if (e.code === 'ArrowDown') { e.preventDefault(); handleQuickDrop(); }
 });
-window.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'BUTTON') handleJump(); });
-window.addEventListener('touchstart', (e) => { if (e.target.tagName === 'BUTTON') return; touchStartY = e.touches[0].clientY; }, { passive: false });
-window.addEventListener('touchend', (e) => {
-    if (e.target.tagName === 'BUTTON') return;
-    let deltaY = e.changedTouches[0].clientY - touchStartY;
-    if (deltaY > 30) handleQuickDrop(); else handleJump();
+
+window.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'BUTTON') handleInput(); });
+
+window.addEventListener('touchstart', (e) => { 
+    if (e.target.tagName !== 'BUTTON') {
+        // e.preventDefault(); // 스크롤 방지가 필요할 경우 주석 해제
+        touchStartY = e.touches[0].clientY; 
+    }
 }, { passive: false });
 
-loop();
+window.addEventListener('touchend', (e) => {
+    if (e.target.tagName !== 'BUTTON') {
+        let deltaY = e.changedTouches[0].clientY - touchStartY;
+        if (deltaY > 30) handleQuickDrop(); else handleInput();
+    }
+}, { passive: false });
+
 </script>
 </body>
 </html>
