@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Red Horse Run - 2026 Special Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nanum+Baeruen+Pen:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f7f7f7; overflow: hidden; font-family: 'Press Start 2P', cursive; touch-action: none; }
+        #game-container { position: relative; width: 800px; height: 200px; background-color: #f7f7f7; }
+        canvas { display: block; background-color: transparent; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #gameOverUI { display: none; text-align: center; }
+        .game-over-text { color: #e52c2f; font-size: 24px; margin-bottom: 20px; }
+        .restart-btn { pointer-events: all; cursor: pointer; background: #e52c2f; border: none; padding: 12px 24px; font-family: 'Press Start 2P', cursive; font-size: 14px; color: #f7f7f7; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="game"></canvas>
+        <div id="gameOverUI" class="ui-layer">
+            <div class="game-over-text">GAME OVER</div>
+            <button class="restart-btn" onclick="resetGame(event)">RESTART</button>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const gameOverUI = document.getElementById('gameOverUI');
+
+canvas.width = 800;
+canvas.height = 200;
+ctx.imageSmoothingEnabled = false;
+
+const imgRun1 = new Image(); imgRun1.src = 'horse_run1.png';
+const imgRun2 = new Image(); imgRun2.src = 'horse_run2.png';
+const imgRun3 = new Image(); imgRun3.src = 'horse_run3.png';
+const imgFire = new Image(); imgFire.src = 'fire.png';
+const runFrames = [imgRun1, imgRun2, imgRun3];
+
+let score = 0;
+let highScore = localStorage.getItem('horseHighScore') || 0;
+let isGameOver = false;
+let gameSpeed = 8;
+let frameCount = 0;
+let scoreTimer = 0;
+let nextObstacleTimer = 0;
+
+let horse = { x: 50, y: 133, width: 52, height: 52, dy: 0, jumpForce: 12.5, gravity: 0.7, isJumping: false, frameIndex: 0 };
+let obstacles = [];
+let clouds = [];
+let floorDots = [];
+
+// 이스터에그 설정
+let easterEgg = {
+    text: "Happy New Year! 새해 복 많이 받으세요! 2026년은 붉은 말의 해라고 합니다. 올 한 해는 하고 싶은 일들에 망설임 없이 도전하고, 더욱 열정적으로 달릴 수 있는 힘찬 한 해 되길 바랍니다. 어떤 장애물이 나타나더라도 모든 걸 뛰어넘을 만큼 열정 가득한 한 해가 되길 응원합니다!",
+    x: 850,
+    y: 110,
+    triggered: false,
+    visible: true
+};
+
+let touchStartY = 0;
+
+for(let i=0; i<15; i++) {
+    floorDots.push({ x: Math.random()*800, y: 188 + Math.random()*8, w: Math.random()*4+1 });
+}
+
+function handleJump() {
+    if (isGameOver) return;
+    if (!horse.isJumping) { horse.isJumping = true; horse.dy = -horse.jumpForce; }
+}
+
+function handleQuickDrop() {
+    if (horse.isJumping) horse.dy += 15;
+}
+
+function resetGame(e) {
+    if(e) e.stopPropagation();
+    score = 0; scoreTimer = 0; nextObstacleTimer = 0;
+    obstacles = []; clouds = []; isGameOver = false;
+    horse.y = 133; horse.dy = 0; horse.isJumping = false;
+    gameSpeed = 8; frameCount = 0;
+    easterEgg.x = 850; easterEgg.triggered = false; easterEgg.visible = true;
+    gameOverUI.style.display = 'none';
+}
+
+function update() {
+    if (isGameOver) return;
+    frameCount++;
+
+    scoreTimer++;
+    if (scoreTimer >= 6) {
+        score++;
+        scoreTimer = 0;
+        if (score % 100 === 0) gameSpeed += 0.5; 
+        if (score >= 400) easterEgg.triggered = true;
+    }
+
+    if (horse.isJumping) {
+        horse.dy += horse.gravity;
+        horse.y += horse.dy;
+        if (horse.y >= 133) { horse.y = 133; horse.isJumping = false; horse.dy = 0; }
+    }
+
+    if (frameCount % 4 === 0) horse.frameIndex = (horse.frameIndex + 1) % runFrames.length;
+
+    if (frameCount % 120 === 0) clouds.push({ x: 800, y: 30 + Math.random()*50, w: 40 + Math.random()*30 });
+    clouds.forEach((c, i) => { c.x -= 1; if(c.x + c.w < 0) clouds.splice(i, 1); });
+
+    // 이스터에그 텍스트 이동
+    if (easterEgg.triggered && easterEgg.visible) {
+        easterEgg.x -= 1;
+        if (easterEgg.x < -3800) easterEgg.visible = false;
+    }
+
+    floorDots.forEach(d => { d.x -= gameSpeed; if(d.x < 0) d.x = 800; });
+
+    nextObstacleTimer--;
+    if (nextObstacleTimer <= 0) {
+        let maxCount = Math.min(1 + Math.floor(score / 300), 5); 
+        let obstacleCount = Math.floor(Math.random() * maxCount) + 1;
+        let lastX = 800;
+        for (let j = 0; j < obstacleCount; j++) {
+            let size = 0.8 + Math.random() * 0.6;
+            let w = 30 * size; let h = 40 * size;
+            obstacles.push({ x: lastX, y: 185 - h, width: w, height: h });
+            lastX += w + 2; 
+        }
+        nextObstacleTimer = Math.max(30, Math.floor(Math.random() * 40) + 35 - (gameSpeed * 0.5)); 
+    }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].x -= gameSpeed;
+        if (horse.x + 15 < obstacles[i].x + obstacles[i].width && horse.x + horse.width - 15 > obstacles[i].x &&
+            horse.y + 10 < obstacles[i].y + obstacles[i].height && horse.y + horse.height - 5 > obstacles[i].y) {
+            isGameOver = true;
+            gameOverUI.style.display = 'flex';
+            if (score > highScore) { highScore = score; localStorage.setItem('horseHighScore', highScore); }
+        }
+        if (obstacles[i].x + obstacles[i].width < -100) obstacles.splice(i, 1);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 구름 그리기
+    ctx.fillStyle = "rgba(229, 44, 47, 0.2)";
+    clouds.forEach(c => { ctx.fillRect(c.x, c.y, c.w, 12); ctx.fillRect(c.x + 8, c.y - 4, c.w - 16, 4); });
+
+    // 이스터에그 메시지 (나눔 바른 펜 적용)
+    if (easterEgg.triggered && easterEgg.visible) {
+        ctx.fillStyle = "rgba(83, 83, 83, 0.85)";
+        ctx.font = '700 15px "Nanum Baeruen Pen", sans-serif'; // 정갈한 손글씨 폰트
+        ctx.textAlign = 'left';
+        ctx.fillText(easterEgg.text, easterEgg.x, easterEgg.y);
+    }
+
+    ctx.strokeStyle = '#e52c2f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 185); ctx.lineTo(800, 185); ctx.stroke();
+    ctx.fillStyle = '#e52c2f'; floorDots.forEach(d => ctx.fillRect(d.x, d.y, d.w, 2));
+
+    let currentImg = horse.isJumping ? imgRun2 : runFrames[horse.frameIndex];
+    ctx.drawImage(currentImg, horse.x, horse.y, horse.width, horse.height);
+    obstacles.forEach(ob => ctx.drawImage(imgFire, ob.x, ob.y, ob.width, ob.height));
+
+    ctx.fillStyle = '#e52c2f'; ctx.font = '12px "Press Start 2P"'; ctx.textAlign = 'right';
+    ctx.fillText(`HI ${String(highScore).padStart(5, '0')} ${String(score).padStart(5, '0')}`, 780, 30);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+window.addEventListener('keydown', (e) => { 
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); handleJump(); } 
+    else if (e.code === 'ArrowDown') { e.preventDefault(); handleQuickDrop(); }
+});
+window.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'BUTTON') handleJump(); });
+window.addEventListener('touchstart', (e) => { if (e.target.tagName === 'BUTTON') return; touchStartY = e.touches[0].clientY; }, { passive: false });
+window.addEventListener('touchend', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    let deltaY = e.changedTouches[0].clientY - touchStartY;
+    if (deltaY > 30) handleQuickDrop(); else handleJump();
+}, { passive: false });
+
+loop();
+</script>
+</body>
+</html>
